@@ -31,9 +31,10 @@ def test_add_room():
     data = {
         "type": "rooms",
         "item": {
-            "name": "Room 101",
+            "number": "Room 101",  # ✅ Changed from "name"
+            "building": "Main Block",
             "capacity": 50,
-            "room_type": "lecture"
+            "type": "classroom"  # ✅ Changed from "room_type"
         }
     }
     response = requests.post(f"{BASE_URL}/data/add", json=data)

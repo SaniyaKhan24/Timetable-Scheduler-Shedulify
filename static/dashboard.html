@@ -4,19 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Schedulify</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/modal-enhancements.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="site-body">
-    <!-- reusable header will be injected here -->
+    <!-- Reusable Header (handled by app.js) -->
     <div id="site-header"></div>
 
+    <!-- Dashboard Content -->
     <div class="dashboard-wrapper">
         <!-- Main Content -->
         <main class="dashboard-main">
             <!-- Header -->
             <header class="dashboard-header">
-                <h1><i class="fas fa-th-large"></i> Dashboard</h1>
+                <h1>Dashboard</h1>
                 <p>Manage your timetable scheduling system</p>
             </header>
 
@@ -119,10 +121,22 @@
             <section class="tab-page" id="generate-page" style="display: none;">
                 <div class="page-header-section">
                     <h2><i class="fas fa-cogs"></i> Generate Timetable</h2>
+                    <p>Configure algorithm parameters and select division</p>
                 </div>
 
                 <div class="generate-container">
                     <div class="config-card">
+                        <h3>Select Division</h3>
+                        <div class="form-group" style="margin-bottom: 2rem;">
+                            <label><i class="fas fa-layer-group"></i> Division</label>
+                            <select id="division-select" required style="padding: 0.85rem 1rem; background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 0.75rem; color: white; font-size: 1rem; width: 100%;">
+                                <option value="">-- Select a Division --</option>
+                            </select>
+                            <small style="color: rgba(255,255,255,0.7); display: block; margin-top: 0.5rem;">
+                                Choose the division for which you want to generate the timetable
+                            </small>
+                        </div>
+                        
                         <h3>Algorithm Parameters</h3>
                         <div class="params-grid">
                             <div class="param-group">
@@ -141,7 +155,9 @@
                                 <small>Probability of changes</small>
                             </div>
                         </div>
-                        <button class="btn btn-primary btn-large" onclick="generateSchedule()"><i class="fas fa-rocket"></i> Generate Schedule</button>
+                        <button class="btn btn-primary btn-large" id="generate-schedule-btn" type="button">
+                            <i class="fas fa-rocket"></i> Generate Schedule
+                        </button>
                     </div>
 
                     <div id="progress" class="progress hidden">
@@ -155,14 +171,10 @@
 
                 <div id="results" class="results-container hidden">
                     <h3>Results</h3>
-                    <div class="results-grid">
+                    <div class="results-grid" style="grid-template-columns: 1fr;">
                         <div class="schedule-wrapper">
                             <h4><i class="fas fa-table"></i> Class Schedule</h4>
                             <div id="schedule-table" class="schedule-table"></div>
-                        </div>
-                        <div class="fitness-wrapper">
-                            <h4><i class="fas fa-chart-line"></i> Fitness Evolution</h4>
-                            <canvas id="fitness-canvas"></canvas>
                         </div>
                     </div>
                 </div>
@@ -170,7 +182,7 @@
         </main>
     </div>
 
-    <!-- reusable footer will be injected here -->
+    <!-- Reusable Footer (handled by app.js) -->
     <div id="site-footer"></div>
 
     <!-- Modal Overlay -->
@@ -190,8 +202,77 @@
             </form>
         </div>
     </div>
+    </div>
 
-    <!-- Load script at the end -->
+    <!-- Load scripts at the end IN CORRECT ORDER -->
+    <script src="auth.js"></script>
+    <script src="header.js"></script>
     <script src="app.js"></script>
+    <script src="dashboard.js"></script>
+    
+    <script>
+        // Add delete function
+        function deleteItem(type, id) {
+            if (!confirm(`Are you sure you want to delete this ${type.slice(0, -1)}?`)) return;
+            
+            const arrays = { 
+                timetables: window.timetables || [], 
+                divisions: window.divisions || [], 
+                subjects: window.subjects || [], 
+                faculty: window.faculty || [], 
+                rooms: window.rooms || [], 
+                timeslots: window.timeslots || [] 
+            };
+            
+            let arr = arrays[type];
+            if (!arr) return;
+            
+            const index = arr.findIndex(item => item.id === id);
+            if (index !== -1) {
+                arr.splice(index, 1);
+                localStorage.setItem(type, JSON.stringify(arr));
+                
+                // Update global arrays
+                if (type === 'timetables') window.timetables = arr;
+                else if (type === 'divisions') window.divisions = arr;
+                else if (type === 'subjects') window.subjects = arr;
+                else if (type === 'faculty') window.faculty = arr;
+                else if (type === 'rooms') window.rooms = arr;
+                else if (type === 'timeslots') window.timeslots = arr;
+                
+                renderAllData();
+                console.log(`✅ Deleted ${type.slice(0, -1)}`);
+            }
+        }
+        
+        // Navigate to generate page
+        function navigateToGenerate() {
+            // Hide all tabs
+            document.querySelectorAll('.tab-page').forEach(page => {
+                page.classList.remove('active');
+                page.style.display = 'none';
+            });
+            document.querySelectorAll('.tab-nav-btn').forEach(btn => btn.classList.remove('active'));
+            
+            // Show generate page
+            const generatePage = document.getElementById('generate-page');
+            if (generatePage) {
+                generatePage.classList.add('active');
+                generatePage.style.display = 'block';
+                
+                // Populate division select
+                const divisionSelect = document.getElementById('division-select');
+                if (divisionSelect) {
+                    const divisions = JSON.parse(localStorage.getItem('divisions')) || [];
+                    divisionSelect.innerHTML = '<option value="">-- Select a Division --</option>' +
+                        divisions.map(d => `<option value="${d.id}">${d.name} - Year ${d.year}</option>`).join('');
+                }
+            }
+        }
+        
+        // Make deleteItem and navigateToGenerate globally available
+        window.deleteItem = deleteItem;
+        window.navigateToGenerate = navigateToGenerate;
+    </script>
 </body>
 </html>

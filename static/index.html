@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Schedulify - Automatic Schedule Generation</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>Schedulify - Smart Timetable Generator</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="css/modal-enhancements.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="site-body">
-    <!-- reusable header -->
-    <div id="site-header"></div>
+    <!-- Reusable Header -->
+    <div id="header-container"></div>
 
     <!-- Hero Section -->
     <section class="hero" id="home">
@@ -73,9 +74,31 @@
         </div>
     </section>
 
-    <!-- reusable footer -->
-    <div id="site-footer"></div>
+    <!-- Reusable Footer -->
+    <div id="footer-container"></div>
 
-    <script src="app.js"></script>
+    <!-- Load auth.js first, then header.js -->
+    <script src="auth.js"></script>
+    <script src="header.js"></script>
+    
+    <!-- Load header and footer -->
+    <script>
+        // Load header
+        fetch('/components/header.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('header-container').innerHTML = html;
+                console.log('✅ Header HTML loaded');
+            })
+            .catch(error => console.error('❌ Error loading header:', error));
+        
+        // Load footer
+        fetch('/components/footer.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('footer-container').innerHTML = html;
+            })
+            .catch(error => console.error('❌ Error loading footer:', error));
+    </script>
 </body>
 </html>

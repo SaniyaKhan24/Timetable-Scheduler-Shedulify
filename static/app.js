@@ -14,6 +14,9 @@ let timeslots = JSON.parse(localStorage.getItem('timeslots')) || [];
 let currentEditType = null;
 let currentEditIndex = null;
 
+// Add after other global variables
+let resourceTracker = null;
+
 // ===== UTILITY FUNCTIONS =====
 async function apiGet(path) {
     console.log(`📤 GET ${API_BASE}${path}`);
@@ -48,55 +51,8 @@ async function apiPost(path, body) {
 // ===== HEADER/FOOTER LOADER =====
 async function loadHeaderFooter() {
     console.log('Loading header/footer...');
-    try {
-        const [hdrResp, ftrResp] = await Promise.all([
-            fetch('./components/header.html').catch(() => null),
-            fetch('./components/footer.html').catch(() => null)
-        ]);
-        
-        if (hdrResp && hdrResp.ok) {
-            const headerHtml = await hdrResp.text();
-            const holder = document.getElementById('site-header');
-            if (holder) {
-                holder.innerHTML = headerHtml;
-                console.log('✅ Header loaded');
-            }
-        }
-        
-        if (ftrResp && ftrResp.ok) {
-            const footerHtml = await ftrResp.text();
-            const fHolder = document.getElementById('site-footer');
-            if (fHolder) {
-                fHolder.innerHTML = footerHtml;
-                console.log('✅ Footer loaded');
-            }
-        }
-        
-        const logo = document.getElementById('logo-link');
-        if (logo) logo.addEventListener('click', () => window.location.href = 'index.html');
-        
-        const path = window.location.pathname.split('/').pop() || 'index.html';
-        document.querySelectorAll('.site-header .nav-link').forEach(a => {
-            const href = a.getAttribute('href') || '';
-            if (href.includes(path) || href.split('#')[0] === path) {
-                a.classList.add('active');
-            }
-        });
-    } catch (err) {
-        console.warn('⚠️ Header/footer load failed:', err);
-    }
-}
-
-// ===== INITIALIZATION =====
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('DOM Content Loaded');
-    loadHeader();
-    initializeTabs();
-    renderAllData();
-});
-
-// ===== HEADER LOADING =====
-function loadHeader() {
+    
+    // Inline header HTML as fallback
     const headerHTML = `
         <nav class="site-header navbar" role="navigation" aria-label="Main navigation">
             <div class="nav-container">
@@ -115,22 +71,85 @@ function loadHeader() {
 
                 <!-- Right: Dashboard Button -->
                 <div class="nav-right">
-                    <a href="dashboard.html" class="btn btn-nav active"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                    <a href="dashboard.html" class="btn btn-nav"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
                 </div>
             </div>
         </nav>
     `;
-    
-    document.getElementById('site-header').innerHTML = headerHTML;
-    
-    // Add logo click handler
-    const logo = document.getElementById('logo-link');
-    if (logo) {
-        logo.addEventListener('click', () => {
-            window.location.href = 'index.html';
+
+    const footerHTML = `
+        <footer class="site-footer">
+            <p>&copy; 2024 Schedulify. All rights reserved.</p>
+        </footer>
+    `;
+
+    try {
+        // Try to load from external files first
+        const [hdrResp, ftrResp] = await Promise.all([
+            fetch('./components/header.html').catch(() => null),
+            fetch('./components/footer.html').catch(() => null)
+        ]);
+        
+        const holder = document.getElementById('site-header');
+        if (holder) {
+            if (hdrResp && hdrResp.ok) {
+                const headerText = await hdrResp.text();
+                holder.innerHTML = headerText;
+                console.log('✅ Header loaded from file');
+            } else {
+                // Use inline HTML as fallback
+                holder.innerHTML = headerHTML;
+                console.log('✅ Header loaded from inline HTML');
+            }
+        }
+        
+        const fHolder = document.getElementById('site-footer');
+        if (fHolder) {
+            if (ftrResp && ftrResp.ok) {
+                const footerText = await ftrResp.text();
+                fHolder.innerHTML = footerText;
+                console.log('✅ Footer loaded from file');
+            } else {
+                // Use inline HTML as fallback
+                fHolder.innerHTML = footerHTML;
+                console.log('✅ Footer loaded from inline HTML');
+            }
+        }
+        
+        // Add logo click handler
+        const logo = document.getElementById('logo-link');
+        if (logo) {
+            logo.addEventListener('click', () => {
+                window.location.href = 'index.html';
+            });
+        }
+        
+        // Highlight active nav link
+        const path = window.location.pathname.split('/').pop() || 'index.html';
+        document.querySelectorAll('.site-header .nav-link').forEach(a => {
+            const href = a.getAttribute('href') || '';
+            if (href.includes(path) || href.split('#')[0] === path) {
+                a.classList.add('active');
+            }
         });
+    } catch (err) {
+        console.warn('⚠️ Header/footer load failed, using inline HTML:', err);
+        // Fallback to inline HTML
+        const holder = document.getElementById('site-header');
+        if (holder) holder.innerHTML = headerHTML;
+        
+        const fHolder = document.getElementById('site-footer');
+        if (fHolder) fHolder.innerHTML = footerHTML;
     }
 }
+
+// ===== INITIALIZATION =====
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM Content Loaded');
+    loadHeaderFooter(); // Use loadHeaderFooter instead of loadHeader
+    initializeTabs();
+    renderAllData();
+});
 
 // ===== TAB NAVIGATION =====
 function initializeTabs() {
@@ -275,38 +294,97 @@ function renderSubjects() {
         return;
     }
     
+    // Group subjects by base code
+    const groupedSubjects = {};
+    subjects.forEach(subject => {
+        const base = subject.baseCode || subject.code.split('-')[0];
+        if (!groupedSubjects[base]) {
+            groupedSubjects[base] = [];
+        }
+        groupedSubjects[base].push(subject);
+    });
+    
     container.innerHTML = `
         <table>
             <thead>
                 <tr>
                     <th><i class="fas fa-code"></i> Code</th>
                     <th><i class="fas fa-book"></i> Name</th>
-                    <th><i class="fas fa-clock"></i> Hours/Week</th>
                     <th><i class="fas fa-layer-group"></i> Type</th>
+                    <th><i class="fas fa-clock"></i> Hours/Week</th>
+                    <th><i class="fas fa-info-circle"></i> Details</th>
                     <th><i class="fas fa-cog"></i> Actions</th>
                 </tr>
             </thead>
             <tbody>
-                ${subjects.map((subject, index) => `
-                    <tr>
-                        <td><strong>${escapeHtml(subject.code)}</strong></td>
-                        <td>${escapeHtml(subject.name)}</td>
-                        <td>${subject.hours}</td>
-                        <td><span style="text-transform: capitalize;">${subject.type}</span></td>
-                        <td>
-                            <button class="btn btn-secondary" style="padding: 0.5rem 1rem; margin-right: 0.5rem;" onclick="editItem('subjects', ${index})">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-secondary" style="padding: 0.5rem 1rem;" onclick="deleteItem('subjects', ${subject.id})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `).join('')}
+                ${Object.entries(groupedSubjects).map(([baseCode, subjectGroup]) => {
+                    if (subjectGroup.length === 1) {
+                        // Single entry subject
+                        const subject = subjectGroup[0];
+                        const index = subjects.indexOf(subject);
+                        return `
+                            <tr>
+                                <td><strong>${escapeHtml(subject.code)}</strong></td>
+                                <td>${escapeHtml(subject.name)}</td>
+                                <td><span style="text-transform: capitalize;">${subject.type}</span></td>
+                                <td>${subject.hours}</td>
+                                <td>${subject.hourPerSession ? `${subject.hourPerSession}h per session` : '-'}</td>
+                                <td>
+                                    <button class="btn btn-secondary" style="padding: 0.5rem 1rem; margin-right: 0.5rem;" onclick="editItem('subjects', ${index})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-secondary" style="padding: 0.5rem 1rem;" onclick="deleteItem('subjects', ${subject.id})">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        // Multiple entries for same subject
+                        const baseName = subjectGroup[0].baseName || subjectGroup[0].name.split('(')[0].trim();
+                        const totalHours = subjectGroup.reduce((sum, s) => sum + s.hours, 0);
+                        return `
+                            <tr style="background: rgba(168,85,247,0.1);">
+                                <td rowspan="${subjectGroup.length + 1}"><strong>${escapeHtml(baseCode)}</strong></td>
+                                <td rowspan="${subjectGroup.length + 1}"><strong>${escapeHtml(baseName)}</strong></td>
+                                <td colspan="4" style="padding: 0.5rem 1rem; font-weight: 600; color: #a855f7;">
+                                    <i class="fas fa-layer-group"></i> Multi-session Subject (Total: ${totalHours} hrs/week)
+                                </td>
+                            </tr>
+                            ${subjectGroup.map((subject, idx) => {
+                                const index = subjects.indexOf(subject);
+                                return `
+                                    <tr>
+                                        <td><span style="text-transform: capitalize; background: rgba(168,85,247,0.2); padding: 0.3rem 0.6rem; border-radius: 0.3rem;">${subject.type}</span></td>
+                                        <td>${subject.hours} hrs</td>
+                                        <td>${subject.hourPerSession}h per session</td>
+                                        <td>
+                                            ${idx === 0 ? `
+                                                <button class="btn btn-secondary" style="padding: 0.5rem 1rem; margin-right: 0.5rem;" onclick="deleteSubjectGroup('${baseCode}')">
+                                                    <i class="fas fa-trash"></i> Delete All
+                                                </button>
+                                            ` : ''}
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        `;
+                    }
+                }).join('')}
             </tbody>
         </table>
     `;
 }
+
+// Add function to delete entire subject group
+window.deleteSubjectGroup = function(baseCode) {
+    if (!confirm(`Delete all sessions for ${baseCode}?`)) return;
+    
+    subjects = subjects.filter(s => (s.baseCode || s.code.split('-')[0]) !== baseCode);
+    localStorage.setItem('subjects', JSON.stringify(subjects));
+    renderSubjects();
+    console.log(`All sessions for ${baseCode} deleted`);
+};
 
 // ===== RENDER FACULTY =====
 function renderFaculty() {
@@ -325,36 +403,93 @@ function renderFaculty() {
                     <th><i class="fas fa-user"></i> Name</th>
                     <th><i class="fas fa-id-badge"></i> Employee ID</th>
                     <th><i class="fas fa-graduation-cap"></i> Department</th>
+                    <th><i class="fas fa-envelope"></i> Email</th>
+                    <th><i class="fas fa-book"></i> Subjects</th>
+                    <th><i class="fas fa-layer-group"></i> Divisions</th>
+                    <th><i class="fas fa-graduation-cap"></i> Year</th>
                     <th><i class="fas fa-clock"></i> Max Hours</th>
                     <th><i class="fas fa-calendar"></i> Availability</th>
                     <th><i class="fas fa-cog"></i> Actions</th>
                 </tr>
             </thead>
             <tbody>
-                ${faculty.map((member, index) => `
-                    <tr>
-                        <td><strong>${escapeHtml(member.name)}</strong></td>
-                        <td>${escapeHtml(member.employeeId)}</td>
-                        <td>${escapeHtml(member.department)}</td>
-                        <td>${member.maxHours}/week</td>
-                        <td>
-                            <small style="display: block; margin-bottom: 0.25rem;">
-                                <strong>Days:</strong> ${member.availableDays?.length || 0} days
-                            </small>
-                            <small style="display: block;">
-                                <strong>Slots:</strong> ${member.availableTimeSlots?.length || 0} time slots
-                            </small>
-                        </td>
-                        <td>
-                            <button class="btn btn-secondary" style="padding: 0.5rem 1rem; margin-right: 0.5rem;" onclick="editItem('faculty', ${index})">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-secondary" style="padding: 0.5rem 1rem;" onclick="deleteItem('faculty', ${member.id})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `).join('')}
+                ${faculty.map((member, index) => {
+                    // Get subject names
+                    const subjectNames = member.subjects?.map(subId => {
+                        const subject = subjects.find(s => s.id === subId);
+                        return subject ? subject.name : 'Unknown';
+                    }) || [];
+                    
+                    // Get division names
+                    const divisionNames = member.divisions?.map(divId => {
+                        const division = divisions.find(d => d.id === divId);
+                        return division ? division.name : 'Unknown';
+                    }) || [];
+                    
+                    // Get year name
+                    const yearNames = {
+                        '1': 'First Year',
+                        '2': 'Second Year',
+                        '3': 'Third Year',
+                        '4': 'Fourth Year'
+                    };
+                    const yearName = yearNames[member.year] || 'Not assigned';
+                    
+                    // ✅ FIX: Calculate total slots correctly
+                    let totalSlots = 0;
+                    let totalDays = 0;
+                    
+                    if (member.availableTimeSlots) {
+                        if (typeof member.availableTimeSlots === 'object' && !Array.isArray(member.availableTimeSlots)) {
+                            // New format: object with days as keys
+                            totalDays = Object.keys(member.availableTimeSlots).length;
+                            totalSlots = Object.values(member.availableTimeSlots).reduce((sum, slots) => sum + slots.length, 0);
+                        } else if (Array.isArray(member.availableTimeSlots)) {
+                            // Old format: array of time slots
+                            totalSlots = member.availableTimeSlots.length;
+                            totalDays = member.availableDays?.length || 0;
+                        }
+                    }
+                    
+                    return `
+                        <tr>
+                            <td><strong>${escapeHtml(member.name)}</strong></td>
+                            <td>${escapeHtml(member.employeeId)}</td>
+                            <td>${escapeHtml(member.department)}</td>
+                            <td><small>${escapeHtml(member.email || 'N/A')}</small></td>
+                            <td>
+                                ${subjectNames.length > 0 
+                                    ? subjectNames.map(name => `<span style="display: inline-block; background: rgba(255,255,255,0.15); padding: 0.2rem 0.5rem; border-radius: 0.3rem; margin: 0.1rem; font-size: 0.85rem;">${escapeHtml(name)}</span>`).join('')
+                                    : '<small style="color: rgba(255,255,255,0.5);">None</small>'
+                                }
+                            </td>
+                            <td>
+                                ${divisionNames.length > 0 
+                                    ? divisionNames.map(name => `<span style="display: inline-block; background: rgba(168,85,247,0.2); padding: 0.2rem 0.5rem; border-radius: 0.3rem; margin: 0.1rem; font-size: 0.85rem;">${escapeHtml(name)}</span>`).join('')
+                                    : '<small style="color: rgba(255,255,255,0.5);">None</small>'
+                                }
+                            </td>
+                            <td><strong>${yearName}</strong></td>
+                            <td>${member.maxHours}/week</td>
+                            <td>
+                                <small style="display: block; margin-bottom: 0.25rem;">
+                                    <strong>Days:</strong> ${totalDays} days
+                                </small>
+                                <small style="display: block;">
+                                    <strong>Slots:</strong> ${totalSlots} slots
+                                </small>
+                            </td>
+                            <td>
+                                <button class="btn btn-secondary" style="padding: 0.5rem 1rem; margin-right: 0.5rem;" onclick="editItem('faculty', ${index})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-secondary" style="padding: 0.5rem 1rem;" onclick="deleteItem('faculty', ${member.id})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
             </tbody>
         </table>
     `;
@@ -420,30 +555,56 @@ function renderTimeslots() {
                     <th><i class="fas fa-calendar-day"></i> Day</th>
                     <th><i class="fas fa-clock"></i> Start Time</th>
                     <th><i class="fas fa-clock"></i> End Time</th>
-                    <th><i class="fas fa-hourglass-half"></i> Duration</th>
+                    <th><i class="fas fa-hourglass-half"></i> Total Hours</th>
+                    <th><i class="fas fa-info-circle"></i> Description</th>
                     <th><i class="fas fa-cog"></i> Actions</th>
                 </tr>
             </thead>
             <tbody>
-                ${timeslots.map((slot, index) => `
-                    <tr>
-                        <td><strong>${slot.day}</strong></td>
-                        <td>${slot.startTime}</td>
-                        <td>${slot.endTime}</td>
-                        <td>${slot.duration} min</td>
-                        <td>
-                            <button class="btn btn-secondary" style="padding: 0.5rem 1rem; margin-right: 0.5rem;" onclick="editItem('timeslots', ${index})">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-secondary" style="padding: 0.5rem 1rem;" onclick="deleteItem('timeslots', ${slot.id})">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </td>
-                    </tr>
-                `).join('')}
+                ${timeslots.map((slot, index) => {
+                    const hours = calculateHoursDifference(slot.startTime, slot.endTime);
+                    return `
+                        <tr>
+                            <td><strong>${slot.day}</strong></td>
+                            <td>${formatTime(slot.startTime)}</td>
+                            <td>${formatTime(slot.endTime)}</td>
+                            <td><strong>${hours} hours</strong></td>
+                            <td>${slot.description || 'Regular class hours'}</td>
+                            <td>
+                                <button class="btn btn-secondary" style="padding: 0.5rem 1rem; margin-right: 0.5rem;" onclick="editItem('timeslots', ${index})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-secondary" style="padding: 0.5rem 1rem;" onclick="deleteItem('timeslots', ${slot.id})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
             </tbody>
         </table>
     `;
+}
+
+// Helper function to calculate hours difference
+function calculateHoursDifference(startTime, endTime) {
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    const diffMinutes = endMinutes - startMinutes;
+    return (diffMinutes / 60).toFixed(1);
+}
+
+// Helper function to format time
+function formatTime(time) {
+    const [hour, min] = time.split(':');
+    const h = parseInt(hour);
+    const period = h >= 12 ? 'PM' : 'AM';
+    const displayHour = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+    return `${displayHour}:${min} ${period}`;
 }
 
 // ===== UTILITY FUNCTION =====
@@ -474,7 +635,7 @@ function openModal(type, item = null) {
     
     // Store current edit info
     currentEditType = type;
-    currentEditIndex = isEdit ? subjects.indexOf(item) || faculty.indexOf(item) || rooms.indexOf(item) || timeslots.indexOf(item) : null;
+    currentEditIndex = isEdit ? getItemIndex(type, item) : null;
     
     // Set modal title and description
     const titles = {
@@ -504,10 +665,15 @@ function openModal(type, item = null) {
     const form = document.getElementById('modal-form');
     form.onsubmit = (e) => {
         e.preventDefault();
-        handleFormSubmit(type, item);
+        saveModalForm(type, item);
     };
     
     modal.classList.add('active');
+}
+
+function getItemIndex(type, item) {
+    const arrays = { subjects, faculty, rooms, timeslots, divisions };
+    return arrays[type]?.indexOf(item) ?? -1;
 }
 
 function closeModal() {
@@ -515,7 +681,7 @@ function closeModal() {
     const modalContainer = modal.querySelector('.modal-container');
     modal.classList.remove('active', 'fullscreen-modal');
     modalContainer.classList.remove('fullscreen-modal');
-    // Optionally restore modalContainer content if needed
+    document.getElementById('modal-form').reset();
 }
 
 function generateFormFields(type, item = null) {
@@ -528,10 +694,10 @@ function generateFormFields(type, item = null) {
             <div class="form-group">
                 <label><i class="fas fa-graduation-cap"></i> Year/Semester</label>
                 <select id="division-year" required>
-                    <option value="1" ${item?.year === '1' ? 'selected' : ''}>First Year</option>
-                    <option value="2" ${item?.year === '2' ? 'selected' : ''}>Second Year</option>
-                    <option value="3" ${item?.year === '3' ? 'selected' : ''}>Third Year</option>
-                    <option value="4" ${item?.year === '4' ? 'selected' : ''}>Fourth Year</option>
+                    <option value="1" ${item?.year === '1' || item?.year === 1 ? 'selected' : ''}>First Year</option>
+                    <option value="2" ${item?.year === '2' || item?.year === 2 ? 'selected' : ''}>Second Year</option>
+                    <option value="3" ${item?.year === '3' || item?.year === 3 ? 'selected' : ''}>Third Year</option>
+                    <option value="4" ${item?.year === '4' || item?.year === 4 ? 'selected' : ''}>Fourth Year</option>
                 </select>
             </div>
             <div class="form-group">
@@ -554,80 +720,131 @@ function generateFormFields(type, item = null) {
         subjects: `
             <div class="form-group">
                 <label><i class="fas fa-book"></i> Subject Code</label>
-                <input type="text" id="subject-code" value="${item?.code || ''}" placeholder="e.g., CS101" required>
+                <input type="text" id="subject-code" value="${item?.code || item?.baseCode || ''}" placeholder="e.g., CS101" required>
+                <small>Base code for this subject (suffixes will be added automatically)</small>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-heading"></i> Subject Name</label>
-                <input type="text" id="subject-name" value="${item?.name || ''}" placeholder="e.g., Data Structures" required>
+                <input type="text" id="subject-name" value="${item?.name || item?.baseName || ''}" placeholder="e.g., Data Structures" required>
             </div>
             <div class="form-group">
-                <label><i class="fas fa-clock"></i> Hours per Week</label>
-                <input type="number" id="subject-hours" value="${item?.hours || 3}" min="1" max="10" required>
-                <small>Number of class hours per week</small>
+                <label><i class="fas fa-layer-group"></i> Session Types</label>
+                <div style="background: rgba(255,255,255,0.05); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem;">
+                    <label style="display: flex; align-items: center; margin-bottom: 0.75rem; cursor: pointer;">
+                        <input type="checkbox" id="type-theory" onchange="toggleSessionHours('theory')" 
+                               ${item?.type === 'theory' ? 'checked' : ''} 
+                               style="margin-right: 0.75rem; width: 18px; height: 18px; cursor: pointer;">
+                        <span style="font-weight: 600;"><i class="fas fa-book-open"></i> Theory Sessions (1 hour each)</span>
+                    </label>
+                    <div id="theory-hours-container" style="display: ${item?.type === 'theory' ? 'block' : 'none'}; margin-left: 2rem; margin-bottom: 1rem;">
+                        <label style="font-size: 0.9rem; color: rgba(255,255,255,0.8);">Sessions per week:</label>
+                        <input type="number" id="theory-hours" min="1" max="10" value="${item?.type === 'theory' ? item.hours : 3}" style="width: 100px; margin-left: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white;">
+                    </div>
+                    
+                    <label style="display: flex; align-items: center; margin-bottom: 0.75rem; cursor: pointer;">
+                        <input type="checkbox" id="type-lab" onchange="toggleSessionHours('lab')" 
+                               ${item?.type === 'lab' ? 'checked' : ''} 
+                               style="margin-right: 0.75rem; width: 18px; height: 18px; cursor: pointer;">
+                        <span style="font-weight: 600;"><i class="fas fa-flask"></i> Lab Sessions (2 hours each)</span>
+                    </label>
+                    <div id="lab-hours-container" style="display: ${item?.type === 'lab' ? 'block' : 'none'}; margin-left: 2rem; margin-bottom: 1rem;">
+                        <label style="font-size: 0.9rem; color: rgba(255,255,255,0.8);">Sessions per week:</label>
+                        <input type="number" id="lab-hours" min="1" max="5" value="${item?.type === 'lab' ? item.hours : 1}" style="width: 100px; margin-left: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white;">
+                    </div>
+                    
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                        <input type="checkbox" id="type-tutorial" onchange="toggleSessionHours('tutorial')" 
+                               ${item?.type === 'tutorial' ? 'checked' : ''} 
+                               style="margin-right: 0.75rem; width: 18px; height: 18px; cursor: pointer;">
+                        <span style="font-weight: 600;"><i class="fas fa-chalkboard-teacher"></i> Tutorial Sessions (1 hour each)</span>
+                    </label>
+                    <div id="tutorial-hours-container" style="display: ${item?.type === 'tutorial' ? 'block' : 'none'}; margin-left: 2rem;">
+                        <label style="font-size: 0.9rem; color: rgba(255,255,255,0.8);">Sessions per week:</label>
+                        <input type="number" id="tutorial-hours" min="1" max="5" value="${item?.type === 'tutorial' ? item.hours : 1}" style="width: 100px; margin-left: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 0.5rem; color: white;">
+                    </div>
+                </div>
+                <small style="color: rgba(255,255,255,0.7);">Select all applicable session types. Total hours will be calculated automatically.</small>
             </div>
             <div class="form-group">
-                <label><i class="fas fa-layer-group"></i> Type</label>
-                <select id="subject-type" required>
-                    <option value="theory" ${item?.type === 'theory' ? 'selected' : ''}>Theory</option>
-                    <option value="lab" ${item?.type === 'lab' ? 'selected' : ''}>Lab</option>
-                    <option value="practical" ${item?.type === 'practical' ? 'selected' : ''}>Practical</option>
-                </select>
+                <div style="background: rgba(168,85,247,0.15); padding: 1rem; border-radius: 0.5rem; border-left: 3px solid #a855f7;">
+                    <p style="margin: 0; font-size: 0.9rem; color: rgba(255,255,255,0.9);">
+                        <i class="fas fa-info-circle"></i> 
+                        <strong>Note:</strong> ${item ? 'Editing will update all components of this subject.' : 'Multiple components will be created as separate entries.'}
+                    </p>
+                </div>
             </div>
         `,
         faculty: `
             <div class="form-group">
                 <label><i class="fas fa-user"></i> Faculty Name</label>
-                <input type="text" id="faculty-name" value="${item?.name || ''}" placeholder="e.g., Dr. John Smith" required>
+                <input type="text" id="faculty-name" value="${escapeHtml(item?.name || '')}" placeholder="e.g., Ass. Prof. Gitanjali Yadav" required>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-id-badge"></i> Employee ID</label>
-                <input type="text" id="faculty-id" value="${item?.employeeId || ''}" placeholder="e.g., FAC001" required>
+                <input type="text" id="faculty-id" value="${escapeHtml(item?.employeeId || '')}" placeholder="e.g., FAC001" required>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-graduation-cap"></i> Department</label>
-                <input type="text" id="faculty-dept" value="${item?.department || ''}" placeholder="e.g., Computer Science" required>
+                <input type="text" id="faculty-dept" value="${escapeHtml(item?.department || '')}" placeholder="e.g., Computer Science" required>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-envelope"></i> Email</label>
-                <input type="email" id="faculty-email" value="${item?.email || ''}" placeholder="e.g., john.smith@university.edu">
+                <input type="email" id="faculty-email" value="${escapeHtml(item?.email || '')}" placeholder="e.g., gitanjali.yadav@university.edu">
             </div>
             <div class="form-group">
                 <label><i class="fas fa-clock"></i> Max Hours per Week</label>
-                <input type="number" id="faculty-hours" value="${item?.maxHours || 20}" min="1" max="40" required>
+                <input type="number" id="faculty-hours" value="${item?.maxHours || 35}" min="1" max="50" required>
                 <small>Maximum teaching hours per week</small>
             </div>
+            
             <div class="form-group">
-                <label><i class="fas fa-calendar-check"></i> Available Days</label>
-                <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem;">
-                    ${['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => `
-                        <label style="display: flex; align-items: center; gap: 0.25rem; background: rgba(255,255,255,0.1); padding: 0.5rem 0.75rem; border-radius: 0.5rem; cursor: pointer;">
-                            <input type="checkbox" id="faculty-day-${day}" value="${day}" 
-                                ${item?.availableDays?.includes(day) ? 'checked' : ''} 
-                                style="cursor: pointer;">
-                            <span>${day.substring(0, 3)}</span>
-                        </label>
+                <label><i class="fas fa-calendar-week"></i> Weekly Availability</label>
+                <small style="display: block; margin-bottom: 1rem; color: rgba(255,255,255,0.8);">
+                    Select days and time slots when faculty is available
+                </small>
+                ${generateDayWiseTimeSlotGrid(item?.availableTimeSlots || {})}
+            </div>
+            
+            <div class="form-group">
+                <label><i class="fas fa-book"></i> Assign Subjects</label>
+                <select id="faculty-subjects" multiple style="min-height: 120px;">
+                    ${subjects.map(subject => `
+                        <option value="${subject.id}" ${item?.subjects?.includes(subject.id) ? 'selected' : ''}>
+                            ${subject.code} - ${subject.name}
+                        </option>
                     `).join('')}
-                </div>
-                <small>Select days when faculty is available</small>
+                </select>
+                <small>Hold Ctrl/Cmd to select multiple subjects</small>
             </div>
             <div class="form-group">
-                <label><i class="fas fa-clock"></i> Available Time Slots</label>
-                <div style="max-height: 200px; overflow-y: auto; background: rgba(255,255,255,0.05); padding: 0.75rem; border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.2);">
-                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
-                        ${generateTimeSlotOptions(item?.availableTimeSlots || [])}
-                    </div>
-                </div>
-                <small>Select available time slots (8:00 AM - 6:00 PM)</small>
+                <label><i class="fas fa-layer-group"></i> Assign Divisions</label>
+                <select id="faculty-divisions" multiple style="min-height: 120px;">
+                    ${divisions.map(division => `
+                        <option value="${division.id}" ${item?.divisions?.includes(division.id) ? 'selected' : ''}>
+                            ${division.name} - Year ${division.year}
+                        </option>
+                    `).join('')}
+                </select>
+                <small>Hold Ctrl/Cmd to select multiple divisions</small>
+            </div>
+            <div class="form-group">
+                <label><i class="fas fa-graduation-cap"></i> Assign Year</label>
+                <select id="faculty-year" required>
+                    <option value="1" ${item?.year === '1' || item?.year === 1 ? 'selected' : ''}>First Year</option>
+                    <option value="2" ${item?.year === '2' || item?.year === 2 ? 'selected' : ''}>Second Year</option>
+                    <option value="3" ${item?.year === '3' || item?.year === 3 ? 'selected' : ''}>Third Year</option>
+                    <option value="4" ${item?.year === '4' || item?.year === 4 ? 'selected' : ''}>Fourth Year</option>
+                </select>
             </div>
         `,
         rooms: `
             <div class="form-group">
                 <label><i class="fas fa-door-open"></i> Room Number</label>
-                <input type="text" id="room-number" value="${item?.number || ''}" placeholder="e.g., 201" required>
+                <input type="text" id="room-number" value="${escapeHtml(item?.number || '')}" placeholder="e.g., 201" required>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-building"></i> Building</label>
-                <input type="text" id="room-building" value="${item?.building || ''}" placeholder="e.g., Main Block" required>
+                <input type="text" id="room-building" value="${escapeHtml(item?.building || '')}" placeholder="e.g., Main Block" required>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-users"></i> Capacity</label>
@@ -644,7 +861,7 @@ function generateFormFields(type, item = null) {
             </div>
             <div class="form-group">
                 <label><i class="fas fa-check-circle"></i> Facilities</label>
-                <input type="text" id="room-facilities" value="${item?.facilities || ''}" placeholder="e.g., Projector, AC, Whiteboard">
+                <input type="text" id="room-facilities" value="${Array.isArray(item?.facilities) ? item.facilities.join(', ') : (item?.facilities || '')}" placeholder="e.g., Projector, AC, Whiteboard">
                 <small>Comma-separated list</small>
             </div>
         `,
@@ -652,6 +869,7 @@ function generateFormFields(type, item = null) {
             <div class="form-group">
                 <label><i class="fas fa-calendar-day"></i> Day</label>
                 <select id="slot-day" required>
+                    <option value="">Select a day</option>
                     <option value="Monday" ${item?.day === 'Monday' ? 'selected' : ''}>Monday</option>
                     <option value="Tuesday" ${item?.day === 'Tuesday' ? 'selected' : ''}>Tuesday</option>
                     <option value="Wednesday" ${item?.day === 'Wednesday' ? 'selected' : ''}>Wednesday</option>
@@ -662,15 +880,15 @@ function generateFormFields(type, item = null) {
             </div>
             <div class="form-group">
                 <label><i class="fas fa-clock"></i> Start Time</label>
-                <input type="time" id="slot-start" value="${item?.startTime || '09:00'}" required>
+                <input type="time" id="slot-start" value="${item?.startTime || '08:00'}" required>
             </div>
             <div class="form-group">
                 <label><i class="fas fa-clock"></i> End Time</label>
-                <input type="time" id="slot-end" value="${item?.endTime || '10:00'}" required>
+                <input type="time" id="slot-end" value="${item?.endTime || '15:00'}" required>
             </div>
             <div class="form-group">
-                <label><i class="fas fa-hourglass-half"></i> Duration (minutes)</label>
-                <input type="number" id="slot-duration" value="${item?.duration || 60}" min="15" max="180" step="15" required>
+                <label><i class="fas fa-info-circle"></i> Description (Optional)</label>
+                <input type="text" id="slot-description" value="${escapeHtml(item?.description || '')}" placeholder="e.g., Regular class hours">
             </div>
         `
     };
@@ -678,538 +896,673 @@ function generateFormFields(type, item = null) {
     return forms[type] || '';
 }
 
-function generateTimeSlotOptions(selectedSlots = []) {
-    const timeSlots = [
-        { start: '08:00', end: '09:00', label: '8:00 AM - 9:00 AM' },
-        { start: '09:00', end: '10:00', label: '9:00 AM - 10:00 AM' },
-        { start: '10:00', end: '11:00', label: '10:00 AM - 11:00 AM' },
-        { start: '11:00', end: '12:00', label: '11:00 AM - 12:00 PM' },
-        { start: '12:00', end: '13:00', label: '12:00 PM - 1:00 PM' },
-        { start: '13:00', end: '14:00', label: '1:00 PM - 2:00 PM' },
-        { start: '14:00', end: '15:00', label: '2:00 PM - 3:00 PM' },
-        { start: '15:00', end: '16:00', label: '3:00 PM - 4:00 PM' },
-        { start: '16:00', end: '17:00', label: '4:00 PM - 5:00 PM' },
-        { start: '17:00', end: '18:00', label: '5:00 PM - 6:00 PM' }
-    ];
+// ===== DELETE ITEM FUNCTION =====
+window.deleteItem = async function(type, id) {
+    console.log(`🗑️ Deleting ${type} with id ${id}`);
     
-    return timeSlots.map((slot, index) => {
-        const slotValue = `${slot.start}-${slot.end}`;
-        const isChecked = selectedSlots.includes(slotValue);
-        
-        return `
-            <label style="display: flex; align-items: center; gap: 0.5rem; background: rgba(255,255,255,0.1); padding: 0.5rem; border-radius: 0.5rem; cursor: pointer; font-size: 0.9rem;">
-                <input type="checkbox" 
-                    class="faculty-timeslot" 
-                    value="${slotValue}" 
-                    ${isChecked ? 'checked' : ''}
-                    style="cursor: pointer;">
-                <span>${slot.label}</span>
-            </label>
-        `;
-    }).join('');
-}
-
-// ...existing code...
-
-function handleFormSubmit(type, existingItem) {
-    const handlers = {
-        divisions: () => {
-            const selectedOptions = document.getElementById('division-subjects').selectedOptions;
-            const subjectIds = Array.from(selectedOptions).map(option => parseInt(option.value));
-            
-            const division = {
-                id: existingItem?.id || Date.now(),
-                name: document.getElementById('division-name').value.trim(),
-                year: document.getElementById('division-year').value,
-                studentCount: parseInt(document.getElementById('division-students').value),
-                subjects: subjectIds
-            };
-            
-            if (existingItem) {
-                const index = divisions.findIndex(d => d.id === existingItem.id);
-                if (index !== -1) divisions[index] = division;
-            } else {
-                divisions.push(division);
-            }
-            
-            localStorage.setItem('divisions', JSON.stringify(divisions));
-            renderDivisions();
-        },
-        subjects: () => {
-            const subject = {
-                id: existingItem?.id || Date.now(),
-                code: document.getElementById('subject-code').value.trim(),
-                name: document.getElementById('subject-name').value.trim(),
-                hours: parseInt(document.getElementById('subject-hours').value),
-                type: document.getElementById('subject-type').value
-            };
-            
-            if (existingItem) {
-                const index = subjects.findIndex(s => s.id === existingItem.id);
-                if (index !== -1) subjects[index] = subject;
-            } else {
-                subjects.push(subject);
-            }
-            
-            localStorage.setItem('subjects', JSON.stringify(subjects));
-            renderSubjects();
-        },
-        faculty: () => {
-            const availableDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-                .filter(day => document.getElementById(`faculty-day-${day}`)?.checked);
-            
-            // Get selected time slots
-            const availableTimeSlots = Array.from(document.querySelectorAll('.faculty-timeslot:checked'))
-                .map(checkbox => checkbox.value);
-            
-            const member = {
-                id: existingItem?.id || Date.now(),
-                name: document.getElementById('faculty-name').value.trim(),
-                employeeId: document.getElementById('faculty-id').value.trim(),
-                department: document.getElementById('faculty-dept').value.trim(),
-                email: document.getElementById('faculty-email').value.trim(),
-                maxHours: parseInt(document.getElementById('faculty-hours').value),
-                availableDays: availableDays,
-                availableTimeSlots: availableTimeSlots
-            };
-            
-            if (existingItem) {
-                const index = faculty.findIndex(f => f.id === existingItem.id);
-                if (index !== -1) faculty[index] = member;
-            } else {
-                faculty.push(member);
-            }
-            
-            localStorage.setItem('faculty', JSON.stringify(faculty));
-            renderFaculty();
-        },
-        rooms: () => {
-            const room = {
-                id: existingItem?.id || Date.now(),
-                number: document.getElementById('room-number').value.trim(),
-                building: document.getElementById('room-building').value.trim(),
-                capacity: parseInt(document.getElementById('room-capacity').value),
-                type: document.getElementById('room-type').value,
-                facilities: document.getElementById('room-facilities').value.trim()
-            };
-            
-            if (existingItem) {
-                const index = rooms.findIndex(r => r.id === existingItem.id);
-                if (index !== -1) rooms[index] = room;
-            } else {
-                rooms.push(room);
-            }
-            
-            localStorage.setItem('rooms', JSON.stringify(rooms));
-            renderRooms();
-        },
-        timeslots: () => {
-            const slot = {
-                id: existingItem?.id || Date.now(),
-                day: document.getElementById('slot-day').value,
-                startTime: document.getElementById('slot-start').value,
-                endTime: document.getElementById('slot-end').value,
-                duration: parseInt(document.getElementById('slot-duration').value)
-            };
-            
-            if (existingItem) {
-                const index = timeslots.findIndex(t => t.id === existingItem.id);
-                if (index !== -1) timeslots[index] = slot;
-            } else {
-                timeslots.push(slot);
-            }
-            
-            localStorage.setItem('timeslots', JSON.stringify(timeslots));
-            renderTimeslots();
-        }
-    };
-    
-    if (handlers[type]) {
-        handlers[type]();
-        closeModal();
-        console.log(`${type} saved successfully`);
-    }
-}
-
-// ===== EDIT ITEM =====
-function editItem(type, index) {
-    const items = {
-        subjects: subjects[index],
-        faculty: faculty[index],
-        rooms: rooms[index],
-        timeslots: timeslots[index],
-        divisions: divisions[index]
-    };
-    
-    openModal(type, items[type]);
-}
-
-// ===== DELETE FUNCTIONS =====
-function deleteItem(type, id) {
-    if (!confirm('Are you sure you want to delete this item?')) return;
-    
-    const deleters = {
-        divisions: () => {
-            divisions = divisions.filter(d => d.id !== id);
-            localStorage.setItem('divisions', JSON.stringify(divisions));
-            renderDivisions();
-        },
-        subjects: () => {
-            subjects = subjects.filter(s => s.id !== id);
-            localStorage.setItem('subjects', JSON.stringify(subjects));
-            renderSubjects();
-        },
-        faculty: () => {
-            faculty = faculty.filter(f => f.id !== id);
-            localStorage.setItem('faculty', JSON.stringify(faculty));
-            renderFaculty();
-        },
-        rooms: () => {
-            rooms = rooms.filter(r => r.id !== id);
-            localStorage.setItem('rooms', JSON.stringify(rooms));
-            renderRooms();
-        },
-        timeslots: () => {
-            timeslots = timeslots.filter(t => t.id !== id);
-            localStorage.setItem('timeslots', JSON.stringify(timeslots));
-            renderTimeslots();
-        },
-        timetables: () => {
-            timetables = timetables.filter(t => t.id !== id);
-            localStorage.setItem('timetables', JSON.stringify(timetables));
-            renderTimetables();
-        }
-    };
-    
-    if (deleters[type]) {
-        deleters[type]();
-        console.log(`${type} item deleted successfully`);
-    }
-}
-
-// ===== NAVIGATION FUNCTIONS =====
-function navigateToGenerate() {
-    console.log('Navigating to generate page');
-    
-    // Get all tab buttons and pages
-    const tabButtons = document.querySelectorAll('.tab-nav-btn');
-    const tabPages = document.querySelectorAll('.tab-page');
-    
-    // Remove active class from all buttons
-    tabButtons.forEach(btn => btn.classList.remove('active'));
-    
-    // Hide all pages
-    tabPages.forEach(page => {
-        page.classList.remove('active');
-        page.style.display = 'none';
-    });
-    
-    // Show generate page
-    const generatePage = document.getElementById('generate-page');
-    if (generatePage) {
-        generatePage.classList.add('active');
-        generatePage.style.display = 'block';
-        console.log('Generate page activated');
-    } else {
-        console.error('Generate page not found');
-    }
-}
-
-// ===== VIEW TIMETABLE =====
-function viewTimetable(id) {
-    const timetable = timetables.find(t => t.id === id);
-    if (!timetable) {
-        alert('Timetable not found!');
+    const confirmMessage = `Are you sure you want to delete this ${type.slice(0, -1)}?`;
+    if (!confirm(confirmMessage)) {
         return;
     }
-    const modal = document.getElementById('modal-overlay');
-    const modalContainer = modal.querySelector('.modal-container');
-
-    // Generate sample schedule if it doesn't exist
-    if (!timetable.schedule) {
-        timetable.schedule = generateSampleSchedule();
-        localStorage.setItem('timetables', JSON.stringify(timetables));
+    
+    try {
+        // Show loading state
+        const btn = event?.target?.closest('button');
+        const originalHTML = btn?.innerHTML;
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        }
+        
+        // Delete from localStorage
+        const arrays = {
+            'timetables': timetables,
+            'divisions': divisions,
+            'subjects': subjects,
+            'faculty': faculty,
+            'rooms': rooms,
+            'timeslots': timeslots
+        };
+        
+        const array = arrays[type];
+        if (array) {
+            const index = array.findIndex(item => item.id === id);
+            if (index !== -1) {
+                array.splice(index, 1);
+                
+                // Update localStorage
+                localStorage.setItem(type, JSON.stringify(array));
+                
+                console.log(`✅ Deleted ${type} id=${id}`);
+                
+                // Re-render
+                renderAllData();
+                
+                // Show success message
+                showNotification(`${type.slice(0, -1)} deleted successfully!`, 'success');
+            } else {
+                showNotification(`${type.slice(0, -1)} not found`, 'error');
+            }
+        }
+        
+        // Restore button
+        if (btn && originalHTML) {
+            btn.disabled = false;
+            btn.innerHTML = originalHTML;
+        }
+    } catch (error) {
+        console.error(`❌ Error deleting ${type}:`, error);
+        showNotification(`Error deleting ${type.slice(0, -1)}: ${error.message}`, 'error');
+        
+        // Restore button
+        const btn = event?.target?.closest('button');
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-trash"></i>';
+        }
     }
+};
 
-    // Add fullscreen classes
-    modal.classList.add('fullscreen-modal');
-    modalContainer.classList.add('fullscreen-modal');
-
-    modalContainer.innerHTML = `
-        <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
-        <div class="modal-header">
-            <h2><i class="fas fa-calendar-check"></i> ${timetable.name}</h2>
-            <p>Fitness Score: ${timetable.fitness}% | Created: ${new Date(timetable.createdAt).toLocaleDateString()}</p>
-        </div>
-        <div class="schedule-table">
-            ${generateScheduleTable(timetable.schedule)}
-        </div>
-        <div class="modal-actions">
-            <button class="btn-modal-primary" onclick="downloadTimetable(${id})">
-                <i class="fas fa-download"></i> Download
-            </button>
-            <button class="btn-modal-secondary" onclick="printTimetable(${id})">
-                <i class="fas fa-print"></i> Print
-            </button>
-            <button class="btn-modal-secondary" onclick="closeModal()">
-                <i class="fas fa-times"></i> Close
+// ===== NOTIFICATION SYSTEM =====
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        z-index: 10000;
+        animation: slideIn 0.3s ease-out;
+        max-width: 400px;
+    `;
+    
+    notification.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+            <span>${message}</span>
+            <button onclick="this.parentElement.parentElement.remove()" style="margin-left: auto; background: none; border: none; color: white; cursor: pointer; font-size: 1.2rem;">
+                <i class="fas fa-times"></i>
             </button>
         </div>
     `;
+    
+    document.body.appendChild(notification);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-in';
+        setTimeout(() => notification.remove(), 300);
+    }, 5000);
+}
+
+// Add CSS animation
+if (!document.getElementById('notification-styles')) {
+    const style = document.createElement('style');
+    style.id = 'notification-styles';
+    style.textContent = `
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// ===== CRUD FUNCTIONS =====
+function saveModalForm(type, item) {
+    console.log(`💾 Saving ${type}...`, item ? 'EDIT' : 'NEW');
+    
+    let isEdit = !!item;
+
+    // Gather form data
+    let newItem = {};
+    if (type === 'divisions') {
+        newItem = {
+            id: isEdit ? item.id : Date.now(),
+            name: document.getElementById('division-name').value.trim(),
+            year: document.getElementById('division-year').value,
+            studentCount: parseInt(document.getElementById('division-students').value),
+            subjects: Array.from(document.getElementById('division-subjects').selectedOptions).map(opt => parseInt(opt.value))
+        };
+        
+        // Update or add to divisions array
+        if (isEdit) {
+            const index = divisions.findIndex(d => d.id === item.id);
+            if (index !== -1) divisions[index] = newItem;
+        } else {
+            divisions.push(newItem);
+        }
+        
+    } else if (type === 'subjects') {
+        // Gather all checked session types
+        let code = document.getElementById('subject-code').value.trim();
+        let name = document.getElementById('subject-name').value.trim();
+        let sessionTypes = [];
+        
+        if (document.getElementById('type-theory').checked) {
+            sessionTypes.push({
+                type: 'theory',
+                hours: parseInt(document.getElementById('theory-hours').value),
+                hourPerSession: 1
+            });
+        }
+        if (document.getElementById('type-lab').checked) {
+            sessionTypes.push({
+                type: 'lab',
+                hours: parseInt(document.getElementById('lab-hours').value),
+                hourPerSession: 2
+            });
+        }
+        if (document.getElementById('type-tutorial').checked) {
+            sessionTypes.push({
+                type: 'tutorial',
+                hours: parseInt(document.getElementById('tutorial-hours').value),
+                hourPerSession: 1
+            });
+        }
+        
+        // Validate at least one session type is selected
+        if (sessionTypes.length === 0) {
+            showNotification('Please select at least one session type', 'error');
+            return;
+        }
+        
+        // Remove old subject group if editing
+        if (isEdit) {
+            let baseCode = item.baseCode || item.code.split('-')[0];
+            subjects = subjects.filter(s => (s.baseCode || s.code.split('-')[0]) !== baseCode);
+        }
+        
+        // Add each session type as a separate subject entry
+        sessionTypes.forEach((sessionType, idx) => {
+            let suffix = '';
+            if (sessionType.type === 'theory') suffix = '-T';
+            else if (sessionType.type === 'lab') suffix = '-L';
+            else if (sessionType.type === 'tutorial') suffix = '-Tut';
+            
+            const newCode = sessionTypes.length > 1 ? `${code}${suffix}` : code;
+            const newSubject = {
+                id: Date.now() + idx,
+                code: newCode,
+                name: sessionTypes.length > 1 ? `${name} (${sessionType.type.charAt(0).toUpperCase() + sessionType.type.slice(1)})` : name,
+                type: sessionType.type,
+                hours: sessionType.hours,
+                hourPerSession: sessionType.hourPerSession,
+                baseCode: code,
+                baseName: name
+            };
+            subjects.push(newSubject);
+            console.log('✅ Added subject:', newSubject);
+        });
+        
+    } else if (type === 'faculty') {
+        newItem = {
+            id: isEdit ? item.id : Date.now(),
+            name: document.getElementById('faculty-name').value.trim(),
+            employeeId: document.getElementById('faculty-id').value.trim(),
+            department: document.getElementById('faculty-dept').value.trim(),
+            email: document.getElementById('faculty-email').value.trim(),
+            maxHours: parseInt(document.getElementById('faculty-hours').value),
+            subjects: Array.from(document.getElementById('faculty-subjects').selectedOptions).map(opt => parseInt(opt.value)),
+            divisions: Array.from(document.getElementById('faculty-divisions').selectedOptions).map(opt => parseInt(opt.value)),
+            year: document.getElementById('faculty-year').value,
+            availableTimeSlots: {},
+            availableDays: []
+        };
+        
+        // Collect selected time slots from the grid
+        const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        daysOfWeek.forEach(day => {
+            const dayCheckboxes = document.querySelectorAll(`.time-slot-checkbox[data-day="${day}"]:checked`);
+            if (dayCheckboxes.length > 0) {
+                const slots = Array.from(dayCheckboxes).map(cb => cb.getAttribute('data-slot'));
+                newItem.availableTimeSlots[day] = slots;
+                newItem.availableDays.push(day);
+            }
+        });
+        
+        // Validate that at least some slots are selected
+        if (Object.keys(newItem.availableTimeSlots).length === 0) {
+            showNotification('Please select at least one time slot for faculty availability!', 'error');
+            return;
+        }
+        
+        console.log('📅 Faculty availability:', newItem.availableTimeSlots);
+        
+        // Update or add to faculty array
+        if (isEdit) {
+            const index = faculty.findIndex(f => f.id === item.id);
+            if (index !== -1) faculty[index] = newItem;
+        } else {
+            faculty.push(newItem);
+        }
+        
+    } else if (type === 'rooms') {
+        newItem = {
+            id: isEdit ? item.id : Date.now(),
+            number: document.getElementById('room-number').value.trim(),
+            building: document.getElementById('room-building').value.trim(),
+            capacity: parseInt(document.getElementById('room-capacity').value),
+            type: document.getElementById('room-type').value,
+            facilities: document.getElementById('room-facilities').value.split(',').map(f => f.trim()).filter(f => f)
+        };
+        
+        // Update or add to rooms array
+        if (isEdit) {
+            const index = rooms.findIndex(r => r.id === item.id);
+            if (index !== -1) rooms[index] = newItem;
+        } else {
+            rooms.push(newItem);
+        }
+        
+    } else if (type === 'timeslots') {
+        newItem = {
+            id: isEdit ? item.id : Date.now(),
+            day: document.getElementById('slot-day').value,
+            startTime: document.getElementById('slot-start').value,
+            endTime: document.getElementById('slot-end').value,
+            description: document.getElementById('slot-description').value.trim()
+        };
+        
+        // Update or add to timeslots array
+        if (isEdit) {
+            const index = timeslots.findIndex(t => t.id === item.id);
+            if (index !== -1) timeslots[index] = newItem;
+        } else {
+            timeslots.push(newItem);
+        }
+    }
+
+    // Save all data to localStorage
+    console.log('💾 Saving to localStorage...');
+    localStorage.setItem('timetables', JSON.stringify(timetables));
+    localStorage.setItem('divisions', JSON.stringify(divisions));
+    localStorage.setItem('subjects', JSON.stringify(subjects));
+    localStorage.setItem('faculty', JSON.stringify(faculty));
+    localStorage.setItem('rooms', JSON.stringify(rooms));
+    localStorage.setItem('timeslots', JSON.stringify(timeslots));
+    
+    console.log(`✅ Saved ${type}:`, type === 'subjects' ? `${subjects.length} subjects` : newItem);
+
+    closeModal();
+    renderAllData();
+    
+    showNotification(`${isEdit ? 'Updated' : 'Added'} ${type.slice(0, -1)} successfully!`, 'success');
+}
+
+// ===== VIEW TIMETABLE DETAILS =====
+function viewTimetable(id) {
+    const timetable = timetables.find(t => t.id === id);
+    if (!timetable) {
+        showNotification('Timetable not found', 'error');
+        return;
+    }
+    
+    // Open modal to display timetable
+    const modal = document.getElementById('modal-overlay');
+    const modalTitle = document.getElementById('modal-title');
+    const modalDescription = document.getElementById('modal-description');
+    const modalFormFields = document.getElementById('modal-form-fields');
+    const submitBtn = document.getElementById('modal-submit-btn');
+    
+    modalTitle.textContent = timetable.name;
+    modalDescription.textContent = `Created: ${new Date(timetable.createdAt).toLocaleDateString()} | Fitness: ${timetable.fitness}%`;
+    submitBtn.style.display = 'none'; // Hide submit button
+    
+    modalFormFields.innerHTML = `
+        <div style="max-height: 60vh; overflow-y: auto;">
+            ${generateScheduleTable(timetable.schedule)}
+        </div>
+        <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+            <button type="button" class="btn btn-primary" onclick="downloadTimetable(${id})">
+                <i class="fas fa-download"></i> Download CSV
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="printTimetable(${id})">
+                <i class="fas fa-print"></i> Print
+            </button>
+        </div>
+    `;
+    
+    const form = document.getElementById('modal-form');
+    form.onsubmit = (e) => {
+        e.preventDefault();
+        closeModal();
+    };
+    
     modal.classList.add('active');
 }
 
-function closeModal() {
-    const modal = document.getElementById('modal-overlay');
-    const modalContainer = modal.querySelector('.modal-container');
-    modal.classList.remove('active', 'fullscreen-modal');
-    modalContainer.classList.remove('fullscreen-modal');
-    // Optionally restore modalContainer content if needed
-}
-
-// ===== GENERATE SAMPLE SCHEDULE =====
-function generateSampleSchedule() {
-    if (divisions.length === 0) {
-        alert('Please add at least one division before generating timetables.');
-        return null;
+// Helper function to generate day-wise time slot grid
+function generateDayWiseTimeSlotGrid(availableTimeSlots) {
+    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    // Check which days are currently selected
+    const selectedDays = typeof availableTimeSlots === 'object' && !Array.isArray(availableTimeSlots)
+        ? Object.keys(availableTimeSlots)
+        : [];
+    
+    // Generate time slots from 8 AM to 6 PM (10 hours)
+    const timeSlots = [];
+    for (let hour = 8; hour < 18; hour++) {
+        const startTime = `${String(hour).padStart(2, '0')}:00`;
+        const endTime = `${String(hour + 1).padStart(2, '0')}:00`;
+        timeSlots.push({
+            value: startTime,
+            label: `${formatTime(startTime)} - ${formatTime(endTime)}`
+        });
     }
     
-    const allSchedules = [];
+    let html = `
+        <div style="background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 0.75rem; margin-bottom: 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h4 style="margin: 0; color: #a855f7;"><i class="fas fa-calendar-check"></i> Faculty Availability Schedule</h4>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button type="button" class="btn btn-secondary" onclick="selectStandardHours()" style="padding: 0.5rem 1rem;">
+                        <i class="fas fa-clock"></i> Standard Hours (9AM-5PM)
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="selectAllSlots()" style="padding: 0.5rem 1rem;">
+                        <i class="fas fa-check-double"></i> Select All
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="clearAllSlots()" style="padding: 0.5rem 1rem;">
+                        <i class="fas fa-times"></i> Clear All
+                    </button>
+                </div>
+            </div>
+            
+            <div style="background: rgba(168,85,247,0.1); padding: 1rem; border-radius: 0.5rem; margin-bottom: 1rem; border-left: 3px solid #a855f7;">
+                <p style="margin: 0; font-size: 0.9rem; color: rgba(255,255,255,0.9);">
+                    <i class="fas fa-info-circle"></i> 
+                    <strong>Instructions:</strong> Select the time slots when this faculty member is available. Click on individual cells or use column/row headers to select multiple slots at once.
+                </p>
+            </div>
+            
+            <div style="overflow-x: auto; border-radius: 0.5rem; background: rgba(255,255,255,0.03);">
+                <table style="width: 100%; border-collapse: collapse; min-width: 800px;">
+                    <thead>
+                        <tr style="background: rgba(168,85,247,0.3);">
+                            <th style="padding: 1rem; text-align: left; border: 1px solid rgba(255,255,255,0.1); position: sticky; left: 0; background: rgba(168,85,247,0.3); z-index: 2;">
+                                <input type="checkbox" id="select-all-time-slots" onchange="toggleAllTimeSlots()" style="margin-right: 0.5rem; width: 18px; height: 18px; cursor: pointer;">
+                                <label for="select-all-time-slots" style="cursor: pointer; font-weight: 600;">Day / Time</label>
+                            </th>
+    `;
     
-    divisions.forEach(division => {
-        const divisionSchedule = generateDivisionSchedule(division);
-        allSchedules.push(...divisionSchedule);
+    // Add time slot headers
+    timeSlots.forEach((slot, slotIndex) => {
+        html += `
+            <th style="padding: 0.75rem 0.5rem; text-align: center; border: 1px solid rgba(255,255,255,0.1); font-size: 0.85rem; white-space: nowrap;">
+                <div style="margin-bottom: 0.3rem;">
+                    <input type="checkbox" 
+                           class="column-header-checkbox" 
+                           data-slot="${slot.value}"
+                           onchange="toggleColumn('${slot.value}')"
+                           style="width: 16px; height: 16px; cursor: pointer;">
+                </div>
+                <div style="font-weight: 600;">${slot.label}</div>
+            </th>
+        `;
     });
     
-    // Check for faculty clashes
-    const clashes = checkFacultyClash(allSchedules);
-    if (clashes.length > 0) {
-        console.warn('Faculty clashes detected:', clashes);
-    }
+    html += `
+                        </tr>
+                    </thead>
+                    <tbody>
+    `;
     
-    return allSchedules;
+    // Add rows for each day
+    daysOfWeek.forEach((day, dayIndex) => {
+        const daySlots = availableTimeSlots[day] || [];
+        
+        html += `
+            <tr style="${dayIndex % 2 === 0 ? 'background: rgba(255,255,255,0.02);' : ''}">
+                <td style="padding: 1rem; font-weight: 600; border: 1px solid rgba(255,255,255,0.1); position: sticky; left: 0; background: ${dayIndex % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.1)'}; z-index: 1;">
+                    <input type="checkbox" 
+                           class="row-header-checkbox" 
+                           data-day="${day}"
+                           onchange="toggleRow('${day}')"
+                           style="margin-right: 0.5rem; width: 18px; height: 18px; cursor: pointer;">
+                    <span>${day}</span>
+                </td>
+        `;
+        
+        // Add checkbox for each time slot
+        timeSlots.forEach(slot => {
+            const isChecked = daySlots.includes(slot.value);
+            html += `
+                <td style="padding: 0.5rem; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+                    <label style="display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0.5rem;">
+                        <input type="checkbox" 
+                               class="time-slot-checkbox" 
+                               data-day="${day}" 
+                               data-slot="${slot.value}"
+                               ${isChecked ? 'checked' : ''}
+                               onchange="updateSlotSelection()"
+                               style="width: 20px; height: 20px; cursor: pointer; margin: 0;">
+                    </label>
+                </td>
+            `;
+        });
+        
+        html += `
+            </tr>
+        `;
+    });
+    
+    html += `
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="margin-top: 1rem; padding: 1rem; background: rgba(168,85,247,0.1); border-radius: 0.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                <div style="text-align: center;">
+                    <div style="font-size: 2rem; color: #a855f7; font-weight: 700;" id="total-selected-slots">0</div>
+                    <div style="font-size: 0.9rem; color: rgba(255,255,255,0.7);">Total Slots Selected</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2rem; color: #10b981; font-weight: 700;" id="total-hours-available">0.0</div>
+                    <div style="font-size: 0.9rem; color: rgba(255,255,255,0.7);">Hours Per Week</div>
+                </div>
+                <div style="text-align: center;">
+                    <div style="font-size: 2rem; color: #f59e0b; font-weight: 700;" id="total-days-available">0</div>
+                    <div style="font-size: 0.9rem; color: rgba(255,255,255,0.7);">Days Available</div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 1rem; padding: 0.75rem 1rem; background: rgba(59, 130, 246, 0.1); border-radius: 0.5rem; border-left: 3px solid #3b82f6;">
+                <p style="margin: 0; font-size: 0.85rem; color: rgba(255,255,255,0.8);">
+                    <i class="fas fa-lightbulb" style="color: #fbbf24;"></i> 
+                    <strong>Tip:</strong> Use row/column headers to quickly select entire days or time slots. The timetable generator will only schedule classes during selected slots.
+                </p>
+            </div>
+        </div>
+    `;
+    
+    // Trigger initial count update after a short delay to ensure DOM is ready
+    setTimeout(() => {
+        updateSlotSelection();
+    }, 100);
+    
+    return html;
 }
 
-function generateDivisionSchedule(division) {
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-    const timeSlots = [
-        { start: '09:00', end: '10:00' },
-        { start: '10:00', end: '11:00' },
-        { start: '11:00', end: '12:00' },
-        { start: '12:00', end: '01:00' },
-        { start: '02:00', end: '03:00' },
-        { start: '03:00', end: '04:00' }
-    ];
+// Helper function to select standard hours (9 AM - 5 PM, Mon-Fri)
+window.selectStandardHours = function() {
+    const standardDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
     
-    const schedule = [];
-    const divisionSubjects = subjects.filter(s => division.subjects?.includes(s.id));
+    // First, uncheck all
+    document.querySelectorAll('.time-slot-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
     
-    if (divisionSubjects.length === 0) {
-        console.warn(`No subjects assigned to division ${division.name}`);
-        return schedule;
-    }
-    
-    days.forEach(day => {
-        timeSlots.forEach((slot, index) => {
-            // Lunch break
-            if (slot.start === '12:00') {
-                schedule.push({
-                    division: division.name,
-                    divisionId: division.id,
-                    day,
-                    timeSlot: `${slot.start} - ${slot.end}`,
-                    subject: 'LUNCH BREAK',
-                    faculty: '-',
-                    room: '-',
-                    type: 'break'
-                });
-                return;
+    // Then check standard hours (9 AM - 5 PM = 8 hours)
+    standardDays.forEach(day => {
+        for (let hour = 9; hour < 17; hour++) {
+            const timeSlot = `${String(hour).padStart(2, '0')}:00`;
+            const checkbox = document.querySelector(`.time-slot-checkbox[data-day="${day}"][data-slot="${timeSlot}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
             }
-            
-            // Assign subject
-            const subject = divisionSubjects[Math.floor(Math.random() * divisionSubjects.length)];
-            
-            // Find available faculty for this subject on this day
-            const availableFaculty = faculty.filter(f => 
-                f.availableDays?.includes(day) || !f.availableDays || f.availableDays.length === 0
-            );
-            
-            const facultyMember = availableFaculty.length > 0
-                ? availableFaculty[Math.floor(Math.random() * availableFaculty.length)]
-                : { name: 'TBA', employeeId: 'N/A' };
-            
-            // Find suitable room
-            const suitableRooms = rooms.filter(r => 
-                r.capacity >= division.studentCount &&
-                (subject.type === 'lab' ? r.type === 'lab' : r.type === 'classroom' || r.type === 'lab')
-            );
-            
-            const room = suitableRooms.length > 0
-                ? suitableRooms[Math.floor(Math.random() * suitableRooms.length)]
-                : { number: 'TBA', building: 'N/A', type: 'classroom' };
-            
-            schedule.push({
-                division: division.name,
-                divisionId: division.id,
-                day,
-                timeSlot: `${slot.start} - ${slot.end}`,
-                subject: `${subject.code} - ${subject.name}`,
-                faculty: facultyMember.name,
-                facultyId: facultyMember.id,
-                room: `${room.number} (${room.building})`,
-                roomId: room.id,
-                type: subject.type
-            });
+        }
+    });
+    
+    updateSlotSelection();
+    updateHeaderCheckboxes();
+    showNotification('Standard hours selected: Monday-Friday, 9:00 AM - 5:00 PM (40 hours/week)', 'success');
+};
+
+// Helper function to select all slots
+window.selectAllSlots = function() {
+    document.querySelectorAll('.time-slot-checkbox').forEach(cb => {
+        cb.checked = true;
+    });
+    updateSlotSelection();
+    updateHeaderCheckboxes();
+};
+
+// Helper function to clear all slots
+window.clearAllSlots = function() {
+    document.querySelectorAll('.time-slot-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+    updateSlotSelection();
+    updateHeaderCheckboxes();
+};
+
+// Helper function to toggle all time slots
+window.toggleAllTimeSlots = function() {
+    const masterCheckbox = document.getElementById('select-all-time-slots');
+    const isChecked = masterCheckbox.checked;
+    
+    document.querySelectorAll('.time-slot-checkbox').forEach(cb => {
+        cb.checked = isChecked;
+    });
+    
+    updateSlotSelection();
+    updateHeaderCheckboxes();
+};
+
+// Helper function to toggle entire row (day)
+window.toggleRow = function(day) {
+    const rowCheckbox = document.querySelector(`.row-header-checkbox[data-day="${day}"]`);
+    const isChecked = rowCheckbox.checked;
+    
+    document.querySelectorAll(`.time-slot-checkbox[data-day="${day}"]`).forEach(cb => {
+        cb.checked = isChecked;
+    });
+    
+    updateSlotSelection();
+    updateHeaderCheckboxes();
+};
+
+// Helper function to toggle entire column (time slot)
+window.toggleColumn = function(slot) {
+    const colCheckbox = document.querySelector(`.column-header-checkbox[data-slot="${slot}"]`);
+    const isChecked = colCheckbox.checked;
+    
+    document.querySelectorAll(`.time-slot-checkbox[data-slot="${slot}"]`).forEach(cb => {
+        cb.checked = isChecked;
+    });
+    
+    updateSlotSelection();
+    updateHeaderCheckboxes();
+};
+
+// Update slot selection counts and header checkboxes
+window.updateSlotSelection = function() {
+    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    let totalSlots = 0;
+    let daysWithSlots = new Set();
+    
+    daysOfWeek.forEach(day => {
+        const dayCheckboxes = document.querySelectorAll(`.time-slot-checkbox[data-day="${day}"]`);
+        dayCheckboxes.forEach(cb => {
+            if (cb.checked) {
+                totalSlots++;
+                daysWithSlots.add(day);
+            }
         });
     });
     
-    return schedule;
-}
-
-// ===== FACULTY CLASH DETECTION =====
-function checkFacultyClash(schedule) {
-    const clashes = [];
-    const facultySchedule = {};
+    const totalHours = totalSlots; // Each slot is 1 hour
+    const totalDays = daysWithSlots.size;
     
-    schedule.forEach(entry => {
-        if (entry.type === 'break') return;
-        
-        const key = `${entry.faculty}-${entry.day}-${entry.timeSlot}`;
-        
-        if (facultySchedule[key]) {
-            clashes.push({
-                faculty: entry.faculty,
-                day: entry.day,
-                timeSlot: entry.timeSlot,
-                divisions: [facultySchedule[key].division, entry.division]
-            });
-        } else {
-            facultySchedule[key] = entry;
+    // Update display
+    const totalSlotsEl = document.getElementById('total-selected-slots');
+    const totalHoursEl = document.getElementById('total-hours-available');
+    const totalDaysEl = document.getElementById('total-days-available');
+    
+    if (totalSlotsEl) totalSlotsEl.textContent = totalSlots;
+    if (totalHoursEl) totalHoursEl.textContent = totalHours.toFixed(1);
+    if (totalDaysEl) totalDaysEl.textContent = totalDays;
+    
+    updateHeaderCheckboxes();
+};
+
+// Update header checkboxes based on current selection
+function updateHeaderCheckboxes() {
+    const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    // Update row header checkboxes
+    daysOfWeek.forEach(day => {
+        const rowCheckbox = document.querySelector(`.row-header-checkbox[data-day="${day}"]`);
+        if (rowCheckbox) {
+            const dayCheckboxes = document.querySelectorAll(`.time-slot-checkbox[data-day="${day}"]`);
+            const checkedCount = Array.from(dayCheckboxes).filter(cb => cb.checked).length;
+            rowCheckbox.checked = checkedCount > 0 && checkedCount === dayCheckboxes.length;
+            rowCheckbox.indeterminate = checkedCount > 0 && checkedCount < dayCheckboxes.length;
         }
     });
     
-    return clashes;
-}
-
-// ===== GENERATE SCHEDULE (UPDATE) =====
-function generateSchedule() {
-    const populationSize = document.getElementById('population-size').value;
-    const generations = document.getElementById('generations').value;
-    const mutationRate = document.getElementById('mutation-rate').value;
-    
-    // Validate data exists
-    if (subjects.length === 0) {
-        alert('Please add at least one subject before generating a timetable.');
-        return;
-    }
-    if (faculty.length === 0) {
-        alert('Please add at least one faculty member before generating a timetable.');
-        return;
-    }
-    if (rooms.length === 0) {
-        alert('Please add at least one room before generating a timetable.');
-        return;
-    }
-    if (timeslots.length === 0) {
-        alert('Please add at least one time slot before generating a timetable.');
-        return;
-    }
-    
-    // Show progress
-    document.getElementById('progress').classList.remove('hidden');
-    document.getElementById('results').classList.add('hidden');
-    
-    // Simulate generation
-    setTimeout(() => {
-        const newTimetable = {
-            id: Date.now(),
-            name: `Timetable ${timetables.length + 1}`,
-            status: 'completed',
-            fitness: Math.floor(Math.random() * 20) + 80,
-            createdAt: Date.now(),
-            populationSize,
-            generations,
-            mutationRate,
-            schedule: generateSampleSchedule() // Generate the schedule immediately
-        };
-        
-        timetables.push(newTimetable);
-        localStorage.setItem('timetables', JSON.stringify(timetables));
-        
-        document.getElementById('progress').classList.add('hidden');
-        
-        // Show the generated schedule in results
-        displayGeneratedSchedule(newTimetable);
-        document.getElementById('results').classList.remove('hidden');
-        
-        // Show success message
-        setTimeout(() => {
-            alert('Timetable generated successfully! You can view it in the Timetables tab.');
-            
-            // Switch back to timetables tab
-            const tabButtons = document.querySelectorAll('.tab-nav-btn');
-            const tabPages = document.querySelectorAll('.tab-page');
-            
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            tabPages.forEach(page => {
-                page.classList.remove('active');
-                page.style.display = 'none';
-            });
-            
-            // Activate timetables tab
-            const timetablesBtn = document.querySelector('[data-page="timetables"]');
-            const timetablesPage = document.getElementById('timetables-page');
-            
-            if (timetablesBtn) timetablesBtn.classList.add('active');
-            if (timetablesPage) {
-                timetablesPage.classList.add('active');
-                timetablesPage.style.display = 'block';
-            }
-            
-            renderTimetables();
-        }, 1000);
-    }, 3000);
-}
-
-// ===== DISPLAY GENERATED SCHEDULE =====
-function displayGeneratedSchedule(timetable) {
-    const scheduleTableDiv = document.getElementById('schedule-table');
-    if (scheduleTableDiv) {
-        scheduleTableDiv.innerHTML = generateScheduleTable(timetable.schedule);
-    }
-    
-    // You can also add a fitness chart here if needed
-    const canvas = document.getElementById('fitness-canvas');
-    if (canvas) {
-        const ctx = canvas.getContext('2d');
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw a simple fitness evolution chart
-        ctx.strokeStyle = 'white';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        
-        const generations = 20;
-        const width = canvas.width;
-        const height = canvas.height;
-        
-        for (let i = 0; i <= generations; i++) {
-            const x = (i / generations) * width;
-            const fitness = 60 + (timetable.fitness - 60) * (i / generations) + Math.random() * 5;
-            const y = height - (fitness / 100) * height;
-            
-            if (i === 0) {
-                ctx.moveTo(x, y);
-            } else {
-                ctx.lineTo(x, y);
-            }
+    // Update column header checkboxes
+    for (let hour = 8; hour < 18; hour++) {
+        const timeSlot = `${String(hour).padStart(2, '0')}:00`;
+        const colCheckbox = document.querySelector(`.column-header-checkbox[data-slot="${timeSlot}"]`);
+        if (colCheckbox) {
+            const slotCheckboxes = document.querySelectorAll(`.time-slot-checkbox[data-slot="${timeSlot}"]`);
+            const checkedCount = Array.from(slotCheckboxes).filter(cb => cb.checked).length;
+            colCheckbox.checked = checkedCount > 0 && checkedCount === slotCheckboxes.length;
+            colCheckbox.indeterminate = checkedCount > 0 && checkedCount < slotCheckboxes.length;
         }
-        
-        ctx.stroke();
-        
-        // Add text
-        ctx.fillStyle = 'white';
-        ctx.font = '14px Arial';
-        ctx.fillText(`Final Fitness: ${timetable.fitness}%`, 10, 30);
+    }
+    
+    // Update master checkbox
+    const masterCheckbox = document.getElementById('select-all-time-slots');
+    if (masterCheckbox) {
+        const allCheckboxes = document.querySelectorAll('.time-slot-checkbox');
+        const checkedCount = Array.from(allCheckboxes).filter(cb => cb.checked).length;
+        masterCheckbox.checked = checkedCount > 0 && checkedCount === allCheckboxes.length;
+        masterCheckbox.indeterminate = checkedCount > 0 && checkedCount < allCheckboxes.length;
     }
 }
+
+// Make sure all functions are globally available
+window.generateScheduleTable = generateScheduleTable;
+window.editItem = editItem;
+window.toggleForm = toggleForm;
+window.saveModalForm = saveModalForm;
+window.viewTimetable = viewTimetable;
+window.downloadTimetable = downloadTimetable;
+window.printTimetable = printTimetable;
+window.closeModal = closeModal;

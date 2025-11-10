@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login / Sign Up - Schedulify</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .auth-page-wrapper {
+            min-height: calc(100vh - var(--header-height));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            background: var(--background);
+        }
+        
+        .auth-container {
+            width: 100%;
+            max-width: 420px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 1.25rem;
+            padding: 2rem;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+        
+        .auth-logo {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .auth-logo img {
+            height: 50px;
+            margin-bottom: 0.75rem;
+        }
+        
+        .auth-logo h1 {
+            font-size: 1.35rem;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        
+        .auth-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            background: var(--background);
+            padding: 0.4rem;
+            border-radius: 0.65rem;
+        }
+        
+        .auth-tab {
+            flex: 1;
+            padding: 0.65rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.875rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .auth-tab.active {
+            background: var(--primary-accent);
+            color: white;
+        }
+        
+        .auth-form {
+            margin-top: 1rem;
+        }
+        
+        .auth-form .modal-header {
+            text-align: center;
+            margin-bottom: 1.25rem;
+        }
+        
+        .auth-form .modal-header h2 {
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .auth-form .modal-header p {
+            font-size: 0.875rem;
+            margin: 0;
+        }
+        
+        .auth-form .form-group {
+            margin-bottom: 1.25rem;
+        }
+        
+        .auth-form .form-group label {
+            font-size: 0.875rem;
+            margin-bottom: 0.4rem;
+        }
+        
+        .auth-form .form-group input {
+            padding: 0.75rem 1rem;
+        }
+        
+        .auth-form .modal-actions {
+            margin-top: 1.5rem;
+            padding: 0;
+            border: none;
+        }
+        
+        .auth-form .btn-modal-primary {
+            padding: 0.85rem 1.5rem;
+        }
+        
+        .auth-form p {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.875rem;
+        }
+        
+        .auth-form.hidden {
+            display: none !important;
+        }
+        
+        .back-link {
+            text-align: center;
+            margin-top: 1rem;
+        }
+        
+        .back-link a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: color 0.3s;
+        }
+        
+        .back-link a:hover {
+            color: var(--primary-accent);
+        }
+    </style>
+</head>
+<body class="site-body">
+    <!-- Reusable Header -->
+    <div id="header-container"></div>
+    
+    <div class="auth-page-wrapper">
+        <div class="auth-container">
+            <!-- Logo -->
+            <div class="auth-logo">
+                <img src="/logo.png" alt="Schedulify Logo">
+                <h1>Schedulify</h1>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="auth-tabs">
+                <button class="auth-tab active" onclick="switchTab('login')">Login</button>
+                <button class="auth-tab" onclick="switchTab('signup')">Sign Up</button>
+            </div>
+            
+            <!-- Login Form -->
+            <div id="loginForm" class="auth-form">
+                <div class="modal-header">
+                    <h2><i class="fas fa-sign-in-alt"></i> Welcome Back</h2>
+                    <p>Login to access your timetables</p>
+                </div>
+                <form class="modal-form" onsubmit="handleLogin(event)">
+                    <div class="form-group">
+                        <label for="loginUsername">Username or Email</label>
+                        <input 
+                            type="text" 
+                            id="loginUsername" 
+                            name="username"
+                            required 
+                            placeholder="Enter username or email"
+                            autocomplete="username"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <input 
+                            type="password" 
+                            id="loginPassword" 
+                            name="password"
+                            required 
+                            placeholder="Enter password"
+                            autocomplete="current-password"
+                        >
+                    </div>
+                    <div class="modal-actions">
+                        <button type="submit" class="btn-modal-primary">
+                            <i class="fas fa-sign-in-alt"></i> Login
+                        </button>
+                    </div>
+                    <p>
+                        Don't have an account? 
+                        <a href="#" onclick="switchTab('signup'); return false;">Sign up</a>
+                    </p>
+                </form>
+            </div>
+            
+            <!-- Signup Form -->
+            <div id="signupForm" class="auth-form hidden">
+                <div class="modal-header">
+                    <h2><i class="fas fa-user-plus"></i> Create Account</h2>
+                    <p>Join us to start creating timetables</p>
+                </div>
+                <form class="modal-form" onsubmit="handleSignup(event)">
+                    <div class="form-group">
+                        <label for="signupFullName">Full Name</label>
+                        <input 
+                            type="text" 
+                            id="signupFullName" 
+                            name="fullName"
+                            placeholder="Enter your full name"
+                            autocomplete="name"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="signupUsername">Username *</label>
+                        <input 
+                            type="text" 
+                            id="signupUsername" 
+                            name="username"
+                            required 
+                            placeholder="Choose a username"
+                            autocomplete="username"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="signupEmail">Email *</label>
+                        <input 
+                            type="email" 
+                            id="signupEmail" 
+                            name="email"
+                            required 
+                            placeholder="Enter your email"
+                            autocomplete="email"
+                        >
+                    </div>
+                    <div class="form-group">
+                        <label for="signupPassword">Password *</label>
+                        <input 
+                            type="password" 
+                            id="signupPassword" 
+                            name="password"
+                            required 
+                            placeholder="Choose a password (min 6 characters)"
+                            autocomplete="new-password"
+                            minlength="6"
+                        >
+                    </div>
+                    <div class="modal-actions">
+                        <button type="submit" class="btn-modal-primary">
+                            <i class="fas fa-user-plus"></i> Sign Up
+                        </button>
+                    </div>
+                    <p>
+                        Already have an account? 
+                        <a href="#" onclick="switchTab('login'); return false;">Login</a>
+                    </p>
+                </form>
+            </div>
+            
+            <!-- Back to Home -->
+            <div class="back-link">
+                <a href="/">
+                    <i class="fas fa-arrow-left"></i> Back to Home
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Reusable Footer -->
+    <div id="footer-container"></div>
+
+    <!-- Load scripts -->
+    <script src="auth.js"></script>
+    <script src="header.js"></script>
+    
+    <!-- Load header and footer -->
+    <script>
+        // Load header
+        fetch('/components/header.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('header-container').innerHTML = html;
+                console.log('✅ Header HTML loaded');
+            })
+            .catch(error => console.error('❌ Error loading header:', error));
+        
+        // Load footer
+        fetch('/components/footer.html')
+            .then(response => response.text())
+            .then(html => {
+                document.getElementById('footer-container').innerHTML = html;
+            })
+            .catch(error => console.error('❌ Error loading footer:', error));
+        
+        function switchTab(tab) {
+            const loginForm = document.getElementById('loginForm');
+            const signupForm = document.getElementById('signupForm');
+            const tabs = document.querySelectorAll('.auth-tab');
+            
+            tabs.forEach(t => t.classList.remove('active'));
+            
+            if (tab === 'login') {
+                loginForm.classList.remove('hidden');
+                signupForm.classList.add('hidden');
+                tabs[0].classList.add('active');
+            } else {
+                loginForm.classList.add('hidden');
+                signupForm.classList.remove('hidden');
+                tabs[1].classList.add('active');
+            }
+        }
+        
+        // Check URL params
+        const params = new URLSearchParams(window.location.search);
+        const mode = params.get('mode');
+        if (mode === 'signup') {
+            switchTab('signup');
+        }
+    </script>
+</body>
+</html>

@@ -1,151 +1,145 @@
-const API_URL = 'http://127.0.0.1:5000';
+console.log('📊 Dashboard.js loading...');
 
-async function generateTimetable(algorithm) {
-    showProgress();
+// ===== GENERATE TIMETABLE =====
+async function generateSchedule() {
+    console.log('🚀 generateSchedule called!');
+    
+    const divisionSelect = document.getElementById('division-select');
+    if (!divisionSelect) {
+        console.error('❌ Division select not found!');
+        alert('Error: Division selector not found');
+        return false;
+    }
+    
+    const divisionId = divisionSelect.value;
+    if (!divisionId) {
+        alert('⚠️ Please select a division first!');
+        return false;
+    }
+    
+    const populationSize = parseInt(document.getElementById('population-size')?.value || 50);
+    const generations = parseInt(document.getElementById('generations')?.value || 100);
+    const mutationRate = parseFloat(document.getElementById('mutation-rate')?.value || 0.1);
+    
+    console.log(`📊 Config: Division=${divisionId}, Pop=${populationSize}, Gen=${generations}, Mut=${mutationRate}`);
+    
+    // Show progress
+    const progress = document.getElementById('progress');
+    const results = document.getElementById('results');
+    if (progress) progress.classList.remove('hidden');
+    if (results) results.classList.add('hidden');
     
     try {
-        const response = await fetch(`${API_URL}/generate-timetable`, {
+        console.log('📡 Sending request to backend...');
+        
+        const response = await fetch('http://localhost:5000/api/timetable/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ algorithm })
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to generate timetable');
-        }
-        
-        const result = await response.json();
-        displayResults(result);
-    } catch (error) {
-        hideProgress();
-        alert('Error: ' + error.message);
-    }
-}
-
-async function compareBoth() {
-    showProgress('Comparing algorithms...');
-    
-    try {
-        const response = await fetch(`${API_URL}/compare-algorithms`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'Failed to compare algorithms');
-        }
-        
-        const result = await response.json();
-        displayComparisonResults(result);
-    } catch (error) {
-        hideProgress();
-        alert('Error: ' + error.message);
-    }
-}
-
-function showProgress(text = 'Generating timetable...') {
-    document.getElementById('progress-section').classList.remove('hidden');
-    document.getElementById('results-section').classList.add('hidden');
-    document.getElementById('progress-text').textContent = text;
-}
-
-function hideProgress() {
-    document.getElementById('progress-section').classList.add('hidden');
-}
-
-function displayResults(result) {
-    hideProgress();
-    
-    const resultsSection = document.getElementById('results-section');
-    const algorithmInfo = document.getElementById('algorithm-info');
-    const tableBody = document.getElementById('timetable-body');
-    
-    // Show results
-    resultsSection.classList.remove('hidden');
-    
-    // Display algorithm info
-    algorithmInfo.innerHTML = `
-        <div>
-            <h2>✅ ${result.algorithm}</h2>
-            <p>Fitness Score: <strong>${result.fitness_score.toFixed(2)}</strong></p>
-            <p>Conflicts: <strong>${result.conflicts.length}</strong></p>
-            ${result.conflicts.length > 0 ? `<p style="color: #f87171;">Warnings: ${result.conflicts.join(', ')}</p>` : ''}
-        </div>
-    `;
-    
-    // Display schedule
-    if (result.schedule && result.schedule.length > 0) {
-        tableBody.innerHTML = result.schedule
-            .sort((a, b) => {
-                const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-                const dayDiff = dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day);
-                if (dayDiff !== 0) return dayDiff;
-                return a.start_time.localeCompare(b.start_time);
+            body: JSON.stringify({
+                divisionId: parseInt(divisionId),
+                populationSize,
+                generations,
+                mutationRate
             })
-            .map(item => `
-                <tr>
-                    <td>${item.day}</td>
-                    <td>${item.start_time} - ${item.end_time}</td>
-                    <td><strong>${item.subject}</strong><br><small>${item.subject_code}</small></td>
-                    <td>${item.faculty}</td>
-                    <td>${item.room}</td>
-                </tr>
-            `).join('');
-    } else {
-        tableBody.innerHTML = '<tr><td colspan="5">No schedule generated</td></tr>';
+        });
+        
+        console.log(`📥 Response status: ${response.status}`);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Server error:', errorText);
+            throw new Error(`Server error ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('✅ Data received:', data);
+        
+        if (progress) progress.classList.add('hidden');
+        
+        if (data.success && data.schedule) {
+            let timetables = JSON.parse(localStorage.getItem('timetables')) || [];
+            
+            const timetable = {
+                id: Date.now(),
+                name: `Timetable - ${divisionSelect.options[divisionSelect.selectedIndex].text}`,
+                status: 'completed',
+                fitness: Math.round(data.fitness_score || 0),
+                createdAt: new Date().toISOString(),
+                schedule: data.schedule,
+                conflicts: data.conflicts || [],
+                algorithm: 'Genetic Algorithm'
+            };
+            
+            timetables.push(timetable);
+            localStorage.setItem('timetables', JSON.stringify(timetables));
+            console.log('💾 Saved to localStorage');
+            
+            displayResults(data);
+            
+            alert(`✅ Timetable generated!\n\nFitness: ${timetable.fitness}%\nClasses: ${data.schedule.length}`);
+            
+            if (typeof renderTimetables === 'function') {
+                renderTimetables();
+            }
+        } else {
+            throw new Error(data.error || 'Unknown error');
+        }
+        
+    } catch (error) {
+        console.error('❌ Generation failed:', error);
+        if (progress) progress.classList.add('hidden');
+        alert(`Failed to generate timetable!\n\n${error.message}\n\nCheck:\n1. Flask server running\n2. Browser console (F12) for details`);
     }
+    
+    return false;
 }
 
-function displayComparisonResults(result) {
-    hideProgress();
+// ===== DISPLAY RESULTS =====
+function displayResults(data) {
+    console.log('📊 Displaying results...');
     
-    if (!result.success) {
-        alert('Comparison failed: ' + result.error);
+    const results = document.getElementById('results');
+    const scheduleTable = document.getElementById('schedule-table');
+    
+    if (!scheduleTable) {
+        console.error('❌ #schedule-table not found!');
         return;
     }
     
-    const resultsSection = document.getElementById('results-section');
-    const algorithmInfo = document.getElementById('algorithm-info');
-    const tableBody = document.getElementById('timetable-body');
+    if (!data.schedule || data.schedule.length === 0) {
+        scheduleTable.innerHTML = '<p style="text-align: center; padding: 2rem; color: rgba(255,255,255,0.8);">No schedule data available</p>';
+        if (results) results.classList.remove('hidden');
+        return;
+    }
     
-    resultsSection.classList.remove('hidden');
+    if (typeof window.generateScheduleTable === 'function') {
+        scheduleTable.innerHTML = window.generateScheduleTable(data.schedule);
+        console.log('✅ Schedule table rendered');
+    } else {
+        console.error('❌ generateScheduleTable not available!');
+        scheduleTable.innerHTML = '<p style="color: red;">Error: Display function not loaded</p>';
+    }
     
-    // Display comparison info
-    algorithmInfo.innerHTML = `
-        <div>
-            <h2>🏆 Best: ${result.best_algorithm}</h2>
-            <p>All Results:</p>
-            <ul style="color: white; margin-left: 1rem;">
-                ${result.all_results.map(r => `
-                    <li>
-                        <strong>${r.algorithm}:</strong> 
-                        ${r.error ? `❌ ${r.error}` : `✅ Score: ${r.fitness_score}, Conflicts: ${r.conflicts}`}
-                    </li>
-                `).join('')}
-            </ul>
-        </div>
-    `;
-    
-    // Display best timetable
-    const best = result.best_timetable;
-    if (best && best.schedule) {
-        tableBody.innerHTML = best.schedule
-            .sort((a, b) => {
-                const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-                const dayDiff = dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day);
-                if (dayDiff !== 0) return dayDiff;
-                return a.start_time.localeCompare(b.start_time);
-            })
-            .map(item => `
-                <tr>
-                    <td>${item.day}</td>
-                    <td>${item.start_time} - ${item.end_time}</td>
-                    <td><strong>${item.subject}</strong><br><small>${item.subject_code}</small></td>
-                    <td>${item.faculty}</td>
-                    <td>${item.room}</td>
-                </tr>
-            `).join('');
+    if (results) {
+        results.classList.remove('hidden');
+        results.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 }
+
+// ✅ ATTACH EVENT LISTENER WHEN DOM IS READY
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📊 Dashboard.js: DOM ready, attaching event listeners...');
+    
+    const generateBtn = document.getElementById('generate-schedule-btn');
+    if (generateBtn) {
+        generateBtn.addEventListener('click', generateSchedule);
+        console.log('✅ Generate button event listener attached');
+    } else {
+        console.warn('⚠️ Generate button not found yet');
+    }
+});
+
+// Also make it globally available as backup
+window.generateSchedule = generateSchedule;
+
+console.log('✅ Dashboard.js loaded');
