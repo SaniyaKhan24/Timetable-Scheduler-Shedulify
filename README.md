@@ -2,9 +2,6 @@
 
 An AI-powered timetable scheduling system that uses Genetic Algorithms and Backtracking to generate optimal class schedules automatically.
 
-
-<<<<<<< HEAD
-
 ## Architecture
 
 ### Frontend (JavaScript)
@@ -50,7 +47,6 @@ An AI-powered timetable scheduling system that uses Genetic Algorithms and Backt
 - **Local Storage** - Data persistence across sessions
 - **Schedule Export** - Download as CSV and print functionality
 - **Validation Reports** - Comprehensive conflict analysis and resource utilization
-=======
 
 ## Features
 
@@ -62,17 +58,11 @@ An AI-powered timetable scheduling system that uses Genetic Algorithms and Backt
 - Responsive web interface with glassmorphism design
 - Local storage for data persistence
 - Schedule export and print functionality
->>>>>>> e2a89f520c164a2ea21ec56b309013564111d17a
 
 ## Prerequisites
 
 - Python 3.8 or higher
 - pip (Python package manager)
-<<<<<<< HEAD
-- Modern web browser (Chrome, Firefox, Edge recommended)
-=======
-- Modern web browser
->>>>>>> e2a89f520c164a2ea21ec56b309013564111d17a
 
 ## Installation
 
